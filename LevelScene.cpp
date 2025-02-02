@@ -1,16 +1,28 @@
 #include "LevelScene.hpp"
 #include "core/application_instance.hpp"
-#include "drivers/vulkan/vulkan_context.hpp"
+#include <core/engine_logger.hpp>
+#include <core/event/key_codes.hpp>
 #include <core/update_handlers/sync_update.hpp>
 #include <core/event/input_poll.hpp>
 // #include <imgui.h>
+#include <flecs/addons/cpp/mixins/meta/cursor.hpp>
+#include <glm/common.hpp>
+#include <glm/fwd.hpp>
+#include <glm/geometric.hpp>
 #include <imgui.h>
 #include <imgui/backends/imgui_impl_vulkan.h>
 #include <renderer/renderer.hpp>
 #include <core/ui/widgets.hpp>
+#include <scene/components/components.hpp>
+#include <string>
 #include <vulkan/vulkan_core.h>
 #include <drivers/vulkan/helper_functions.hpp>
 #include <core/image/stb_image.hpp>
+#include <core/math/math.hpp>
+
+constexpr int ROTATION_DIRECTION_X = -1;
+constexpr int ROTATION_DIRECTION_Y = -1;
+constexpr float PULL_WEIGHT = 0.01f;
 
 namespace engine3d{
     struct MeshData{
@@ -43,6 +55,7 @@ namespace engine3d{
     static MeshData sphere_data;
     static MeshData some_mesh_data;
     static CameraData camera_data;
+    static std::string g_MeshFilepath = "";
     // static float angle = glm::radians(45.0f);
 
     struct Projectile{
@@ -71,6 +84,11 @@ namespace engine3d{
             .Position = {0.f, 2.10f, -7.30f},
             .Scale = {.20f,.20f, .20f}
         });
+
+        for (size_t i = 0; i < 5 - 1; ++i) 
+        {
+                lengths.push_back(1.5f);
+        }
 
         auto transform = m_Sphere->GetComponent<Transform>();
 
@@ -121,16 +139,49 @@ namespace engine3d{
             {
                 for(size_t z = 0; z < 10; z++)
                 {
+                    
                     m_MoreObjects[counter] = this->CreateNewObject(fmt::format("Object {}", counter));
+                    
                     m_MoreObjects[counter]->AddComponent<MeshComponent>(mesh);
+                    if(counter == 5)
+                        m_MoreObjects[counter]->SetComponent<MeshComponent>({"3d_models/tutorial/quad.obj"});
                     m_MoreObjects[counter]->SetComponent<Transform>({
-                        .Position = {x,y,z},
-                        .Scale = {.20f,.20f, .20f}
+                        .Position = {counter,0,0},
+                        .Scale = {.10f,.10f, .10f}
                     });
+                    m_SceneObjectLookup.insert({counter, m_MoreObjects[counter]});
                     counter++;
                 }
             }
         }
+
+        m_MoreObjects[0]->SetComponent<Transform>({
+            .Position = {
+                -12.7,
+                6.7,
+                0
+                
+            },
+            .Scale = {.10f,.10f, .10f}
+        });
+
+        m_MoreObjects[5]->SetComponent<Transform>({
+            .Position = {
+                -9.7,
+                3.3,
+                0
+            },
+            .Scale = {1.0f,1.0f, 1.0f}
+        });
+
+        m_MoreObjects[6]->SetComponent<Transform>({
+            .Position = {
+                -10.9,
+                13.3,
+                0
+            },
+            .Scale = {.0010f,.0010f, .0010f}
+        });
 
         SyncUpdate::Subscribe(this, &LevelScene::OnUpdate);
         // SyncUpdate::Subscribe(this, &LevelScene::PhysicsUpdate);
@@ -222,6 +273,27 @@ namespace engine3d{
                 ui::DrawVec3UI("Front", camera_data.Front);
             });
 
+            for(auto[key, value] : m_SceneObjectLookup){
+                ui::DrawPanelComponent<MeshComponent>(fmt::format("Object {}", key), [&](){
+                    auto transform = *value->GetComponent<Transform>();
+                    ui::DrawVec3UI(fmt::format("Object {} Pos", key), transform.Position);
+                    ui::DrawVec3UI(fmt::format("Object {} Scale", key), transform.Scale);
+
+                    // g_MeshFilepath
+                    if(g_MeshFilepath != ""){
+                        std::filesystem::path relative_path = std::filesystem::relative(g_MeshFilepath, "./");
+                        // ConsoleLogTrace("in branch 2 mesh_file = {}", relative_path.filename().string());
+                        value->SetComponent<MeshComponent>({g_MeshFilepath});
+                        g_MeshFilepath = "";
+                    }
+
+                    value->SetComponent<Transform>({
+                        .Position = transform.Position,
+                        .Scale = transform.Scale
+                    });
+                });
+            }
+
             ImGui::End();
         }
     }
@@ -236,8 +308,10 @@ namespace engine3d{
         float deltaTime = SyncUpdate::DeltaTime();
 
         
-        if (InputPoll::IsKeyPressed(ENGINE_KEY_ESCAPE)){
-            ApplicationInstance::GetWindow().Close();
+        if (InputPoll::IsKeyPressed(ENGINE_KEY_LEFT_CONTROL))
+        {
+            if(InputPoll::IsKeyPressed(ENGINE_KEY_F12))
+                ApplicationInstance::GetWindow().Close();
         }
 
         if (InputPoll::IsKeyPressed(ENGINE_KEY_W)){
@@ -252,47 +326,98 @@ namespace engine3d{
         if (InputPoll::IsKeyPressed(ENGINE_KEY_D)){
             camera_comp.ProcessKeyboard(RIGHT, deltaTime);
         }
-        if(InputPoll::IsKeyPressed(ENGINE_KEY_Q)){
+        if(InputPoll::IsKeyPressed(ENGINE_KEY_LEFT_SHIFT)){
             camera_comp.ProcessKeyboard(UP, deltaTime);
         }
-        if(InputPoll::IsKeyPressed(ENGINE_KEY_E)){
+        if(InputPoll::IsKeyPressed(ENGINE_KEY_SPACE)){
             camera_comp.ProcessKeyboard(DOWN, deltaTime);
         }
+        
+        // **Animation** ---------------------------------------------------
 
-        //! @note Press shift key to move using the mouse to rotate around
-        if(InputPoll::IsKeyPressed(ENGINE_KEY_LEFT_SHIFT)){
-            if(InputPoll::IsMousePressed(ENGINE_MOUSE_BUTTON_RIGHT)){
-                glm::vec2 cursor_pos = InputPoll::GetMousePosition();
+        for(int i = 7; i < 1000; i++)
+        {
+            auto value = m_SceneObjectLookup[i];
+            auto transform = *value->GetComponent<Transform>();
 
-                float x_offset = cursor_pos.x;
-                float velocity = x_offset * deltaTime;
-                camera_comp.ProcessMouseMovement(-velocity, 0.f);
+            transform.Position.x += 4 * deltaTime;
+            transform.Position.y = sin(transform.Position.x/2) * (200/transform.Position.x);
+            transform.Position.z = cos(transform.Position.x/2) * (200/transform.Position.x);
+            
+            if(transform.Position.x > 721)
+            {
+                transform.Position.x = 1;
             }
 
-            if(InputPoll::IsMousePressed(ENGINE_MOUSE_BUTTON_LEFT)){
-                glm::vec2 cursor_pos = InputPoll::GetMousePosition();
-
-                float x_offset = cursor_pos.x;
-                float velocity = x_offset * deltaTime;
-                camera_comp.ProcessMouseMovement(velocity, 0.f);
-            }
-
-            if(InputPoll::IsMousePressed(ENGINE_MOUSE_BUTTON_MIDDLE)){
-                glm::vec2 cursor_pos = InputPoll::GetMousePosition();
-
-                float velocity = cursor_pos.y * deltaTime;
-                camera_comp.ProcessMouseMovement(0.f, velocity);
-            }
-
-            if(InputPoll::IsKeyPressed(ENGINE_KEY_SPACE)){
-                // double xPosIn, yPosIn;
-                // glfwGetCursorPos(ApplicationInstance::GetWindow().GetNativeWindow(), &xPosIn, &yPosIn);
-                glm::vec2 cursor_pos = InputPoll::GetMousePosition();
-                // float velocity = yPosIn * deltaTime;
-                float velocity = cursor_pos.y * deltaTime;
-                camera_comp.ProcessMouseMovement(0.f, -velocity);
-            }
+            value->SetComponent(transform);        
         }
+
+        if(!InputPoll::IsKeyPressed(ENGINE_KEY_P))
+        {
+            auto body = *m_SceneObjectLookup[0]->GetComponent<Transform>();
+            auto joint1 = *m_SceneObjectLookup[1]->GetComponent<Transform>();
+            auto joint2 = *m_SceneObjectLookup[2]->GetComponent<Transform>();
+            auto joint3 = *m_SceneObjectLookup[3]->GetComponent<Transform>();
+            auto joint4 = *m_SceneObjectLookup[4]->GetComponent<Transform>();
+
+            auto target = m_SceneObjectLookup[5];
+            auto pull = m_SceneObjectLookup[6];
+
+            std::vector<glm::vec3> jointPositions = 
+            {
+                body.Position,
+                joint1.Position,
+                joint2.Position,
+                joint3.Position,
+                joint4.Position
+            };
+
+            glm::vec3 targetPos = target->GetComponent<Transform>()->Position;
+            glm::vec3 pullPos = pull->GetComponent<Transform>()->Position;
+            solveFABRIK(jointPositions, lengths, targetPos, pullPos);
+        
+            body.Position = jointPositions[0];
+            joint1.Position = jointPositions[1];
+            joint2.Position = jointPositions[2];
+            joint3.Position = jointPositions[3];
+            joint4.Position = jointPositions[4];
+
+            m_SceneObjectLookup[0]->SetComponent(body);
+            m_SceneObjectLookup[1]->SetComponent(joint1);
+            m_SceneObjectLookup[2]->SetComponent(joint2);
+            m_SceneObjectLookup[3]->SetComponent(joint3);
+            m_SceneObjectLookup[4]->SetComponent(joint4);
+        }
+
+        //! @note Press right key and drag the mouse to rotate around
+        if (InputPoll::IsMousePressed(ENGINE_MOUSE_BUTTON_RIGHT)) {
+            glm::vec2 cursor_pos = InputPoll::GetMousePosition();
+            
+            //! @note On right click make sure change starts as 0
+            if(!on_click_check)
+            {
+                last_cursor_pos = cursor_pos;
+                on_click_check = true;
+            }
+
+
+
+            //! @note offset is now delta_x and delta_y
+            //! @note the difference between mouse old and new positions
+            glm::vec2 offset = cursor_pos - last_cursor_pos;
+
+            glm:glm::vec2 velocity = offset * (deltaTime * 100);
+
+            camera_comp.ProcessMouseMovement(velocity.x * ROTATION_DIRECTION_X, 0.0f);
+
+            camera_comp.ProcessMouseMovement(0.0f,velocity.y * ROTATION_DIRECTION_Y);
+
+            last_cursor_pos = cursor_pos;
+        } else {
+            on_click_check = false;
+        }
+
+        
 
 
         // OJoy Stick Controls
@@ -360,6 +485,52 @@ namespace engine3d{
             Renderer::RenderWithCamera(obj, m_Camera);
         }
     }
+
+    void LevelScene::solveFABRIK(std::vector<glm::vec3>& jointPositions, std::vector<float>& lengths, const glm::vec3& target, const glm::vec3& pull, int maxIterations, float tolerance) 
+    { 
+        if(jointPositions.empty()) return;
+
+        glm::vec3 root = jointPositions[0]; // Setup the root for bawkward pass 
+        int numJoints = jointPositions.size();
+
+        float maxReach = 0.0f;
+        for (float len : lengths) maxReach += len;
+
+        float distanceToTarget = glm::length(target - root);
+
+        // Faster iteration if the target is further than the sum
+        // of all joint lengths.
+        if (distanceToTarget > maxReach) {
+            glm::vec3 direction = glm::normalize(target - jointPositions[0]); // Always stretch from current body position
+            for (int i = 1; i < numJoints; ++i) {
+                jointPositions[i] = jointPositions[i - 1] + direction * lengths[i - 1];
+            }
+            return;
+        }
+        // Backward/Forward pass between root and target
+        for(int iterator = 0; iterator < maxIterations; iterator++)
+        {
+            jointPositions[numJoints -1] = target;
+            //Backwards pass first
+
+            for(int i = numJoints - 2; i >= 0; --i)
+            {
+                glm::vec3 direction = glm::normalize(jointPositions[i] - jointPositions[i + 1]);
+                jointPositions[i] = jointPositions[i + 1] + direction * lengths[i];
+            }
+
+            jointPositions[0] = root;
+            for (int i = 1; i < numJoints; ++i) 
+            {
+                glm::vec3 direction = glm::normalize(jointPositions[i] - jointPositions[i - 1]);
+                glm::vec3 newPosition = jointPositions[i - 1] + direction * lengths[i - 1];
+                jointPositions[i] = glm::mix(newPosition, pull, PULL_WEIGHT);
+            }
+
+            // Close enough to target
+            if (glm::length(jointPositions[numJoints - 1] - target) < tolerance) break;
+        }
+    }
 };
 
 
@@ -374,62 +545,4 @@ RenderPass rp = RenderPass();
 rp.SetAttachments({
     {COLOR_FORMAT, sampleCount, NO_LOAD_STORE_STENCIL, NO_IMAGE_DEFINED}
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-*/
-
-
-/*
-
-
-
-
-[WorldTag]
-ID = 1 (hash_id)
-
-
-Actual Tag of WorldTag = "WorldTag#1"
-
-- At creation generates/creates a specific UUID
-
-flecs::world
-
-[Scene1, 2, 3]
-SystemRegistry::Register(world, this);
-
-
-
-Scene Tag = "Tag#1"
-
-
-VkFramebufferCreateInfo ci = {
-    .depthStencil= VK_DEPTH_...
-};
-
-
-VkFramebuffer fb;
-
-
-FramebufferSpecification spec = {
-    .attachments = {
-        COLOR_BUFFER_RBGA16
-        DEPTH_STENCIL_READ_WRITE,
-    }
-};
-
-FrameBuffer fb = Framebuffer(spec);
-
 */

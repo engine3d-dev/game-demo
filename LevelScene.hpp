@@ -1,5 +1,7 @@
 #pragma once
 #include <core/scene/scene.hpp>
+#include <glm/fwd.hpp>
+#include <map>
 
 namespace engine3d{
     /**
@@ -34,5 +36,14 @@ namespace engine3d{
         Ref<SceneObject> m_SomeMesh;
         Ref<SceneObject> m_Camera;
         std::vector<Ref<SceneObject>> m_MoreObjects;
+        std::map<uint32_t, Ref<SceneObject>> m_SceneObjectLookup;
+        float time = 0;
+
+        glm::vec2 last_cursor_pos;
+        bool on_click_check = false;
+
+        std::vector<float> lengths;
+
+        void solveFABRIK(std::vector<glm::vec3>& jointPositions, std::vector<float>& lengths, const glm::vec3& target, const glm::vec3& pull, int maxIterations = 10, float tolerance = 0.01f); 
     };
 };
