@@ -32,18 +32,18 @@ layout(set = 0, binding = 0) uniform GlobalCameraUbo{
     mat4 View;
     mat4 Model;
     vec3 LightTransform;
+    // vec4 Color;
 } camera_ubo;
 
 layout(push_constant) uniform Push {
-    // mat4 Transform; // proj * view
     mat4 Projection;
     mat4 View;
     mat4 Model;
     vec3 LightTransform;
+    vec4 Color;
+    vec2 MousePosition;
 } push;
 
-
 void main(){
-    // outColor = vec4(fragColor, 0.0);
     outColor = vec4(fragColor, 1.0);
 }

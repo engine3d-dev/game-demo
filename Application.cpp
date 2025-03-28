@@ -1,25 +1,28 @@
-#include <engine3d/core/application_instance.hpp>
-#include <engine3d/renderer/renderer.hpp>
-#include "EditorWorld.hpp"
+#include <atlas/core/application.hpp>
+#include <atlas/renderer/renderer.hpp>
+#include "editor_world.hpp"
 
-namespace engine3d{
-    class DemoApplication : public engine3d::ApplicationInstance{
-    public:
-        DemoApplication(const std::string& p_Tag) : ApplicationInstance(p_Tag){
-            ConsoleLogTrace("DemoApplication Instantiation!!!");
-            // Renderer::Initialize();
-            // Renderer::Initialize();
-            // Renderer::SetCustomShaders("shader_demo/simple_shader.vert.spv", "shader_demo/simple_shader.frag.spv", true);
-            ConsoleLogTrace("Testing!");
-            m_World = CreateRef<EditorWorld>("Editor World");
-        }
-
-    private:
-        Ref<EditorWorld> m_World;
-    };
-
-
-    Ref<ApplicationInstance> Initialize(){
-        return CreateRef<DemoApplication>("Demo");
+class test_application : public atlas::application{
+public:
+    test_application(const atlas::application_settings& p_settings) 
+    : application(p_settings) {
+        m_world = atlas::create_ref<editor_world>("Editor World");
     }
+
+private:
+    atlas::ref<editor_world> m_world;
 };
+
+
+namespace atlas {
+    ref<application> initialize_application() {
+        application_settings settings = {
+            .Name = "Editor",
+            .Width = 1200,
+            .Height = 800,
+        };
+
+        return create_ref<test_application>(settings);
+    }
+
+} 

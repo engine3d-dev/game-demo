@@ -5,19 +5,18 @@ project(Starter CXX)
 build_application(
     SOURCES
     application.cpp
-    EditorWorld.hpp
-    EditorWorld.cpp
+    editor_world.hpp
+    editor_world.cpp
 
-    LevelScene.hpp
-    LevelScene.cpp
+    level_scene.hpp
+    level_scene.cpp
 
     PACKAGES
     imguidocking
     stb
     flecs
     tinyobjloader
-    engine3d-nfd
-    engine3d
+    atlas
 
     LINK_PACKAGES
 
@@ -26,8 +25,7 @@ build_application(
     stb::stb
     flecs::flecs_static
     tinyobjloader::tinyobjloader
-    engine3d-nfd::engine3d-nfd
 
 
-    engine3d::engine3d
+    atlas::atlas
 )
